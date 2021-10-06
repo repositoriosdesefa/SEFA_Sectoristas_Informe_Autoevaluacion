@@ -1,0 +1,388 @@
+---
+title-meta: "Reporte Mensual de ODES"
+author-meta: "SEFA"
+date-meta: '\today'
+lang: es
+documentclass: article
+classoption: oneside
+keywords: "Reporte, RStudio, RMarkdown, SEFA"
+geometry:
+- top=2cm
+- left=2.5cm
+- right=2.5cm
+- bottom=3.5cm
+papersize: a4
+fontsize: 11pt
+header-includes:
+- \usepackage[title,titletoc]{appendix}
+- \usepackage{lscape}
+- \newcommand{\blandscape}{\begin{landscape}}
+- \newcommand{\elandscape}{\end{landscape}}
+- \newcommand{\Rlogo}{\protect\includegraphics[height=1.8ex,keepaspectratio]{Rlogo.png}}
+# - \newcommand{\FIRMA1}{\protect\includegraphics[height=4ex,keepaspectratio]{FIRMA1.png}}
+- \usepackage{floatrow}
+- \floatplacement{figure}{H}
+- \floatplacement{table}{H}
+- \floatsetup[figure]{capposition=top}
+- \floatsetup[table]{capposition=top}
+- \addtolength{\skip\footins}{1pc plus 2pt}
+- \usepackage{titlesec}
+- \titleformat*{\section}{\filright \normalsize \bfseries}
+- \titleformat*{\subsection}{\normalsize\bfseries}
+- \titleformat*{\subsubsection}{\normalsize\bfseries}
+- \renewcommand{\thesection}{\Roman{section}}
+- \renewcommand{\thesubsection}{\Alph{subsection}}
+- \usepackage{helvet}
+- \renewcommand{\familydefault}{\sfdefault}
+- \usepackage{colortbl}
+- \usepackage{array}
+- \usepackage{graphicx}
+- \usepackage{hhline,colortbl}
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \setlength{\headheight}{64pt}
+- \fancyhf{}
+- \renewcommand{\headrulewidth}{0pt}
+- \fancyhead[C]{\setlength{\arrayrulewidth}{0.35mm} \arrayrulecolor{white} \begin{tabular} { | >{\arraybackslash}m{1cm} | >{\arraybackslash}m{1cm} | >{\arraybackslash}m{2cm} | >{\arraybackslash}m{3.75cm} | >{\arraybackslash}m{6cm} |} \includegraphics[width=1cm]{peru} & \cellcolor{red} \textcolor{white}{PERÚ} & \cellcolor[gray]{0.2} \scriptsize \textcolor{white}{Ministerio del Ambiente} & \cellcolor[gray]{0.5} \scriptsize \textcolor{white}{Organismo de Evaluación y Fiscalización Ambiental} &  \cellcolor[gray]{0.5} \scriptsize \textcolor{white}{Subdirección de Seguimiento de Entidades de Fiscalización Ambiental} \\ \end{tabular}\\ \vspace{2mm}{\scriptsize "Decenio de la igualdad de oportunidades para mujeres y hombres"}\\ {\scriptsize "Año del Bicentenario del Perú{:} 200 años de Independencia"}} 
+- \fancyfoot[C]{\thepage}
+mainfont: helvet
+params:
+  ODE_NOM: "OD HUANUCO"
+output: 
+  pdf_document:
+    fig_caption: true
+    number_sections: true
+    toc: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+
+# I. Librerías y parámetros ----
+
+# I.1 Librerías ----
+#install.packages("dplyr")
+library(dplyr)
+#install.packages("lubridate")
+library(lubridate)
+#install.packages("bizdays")
+library(bizdays)
+#install.packages("ggplot2")
+library(ggplot2)
+#install.packages("readxl")
+library(readxl)
+#install.packages("stringr")
+library(stringr)
+#install.packages("knitr")
+library(knitr)
+
+# I.2 Parámetros ----
+# i) Conexión de la base
+FUENTE_AUTO_ODES <- ""
+
+# ii) Selección de ODE
+ODE_ANALISIS <- params$ODE_NOM
+
+# iii) Selección de periodo
+f_fecha <- function(x) {
+  as.Date(format(x, "%Y-%m-01"))
+}
+
+periodo_mes <- Sys.Date() %m-% months(3)
+F_INICIO <- as.Date(f_fecha(periodo_mes))
+F_FIN <- as.Date(F_INICIO %m+% months(1) - 1)
+F_INICIO_HIST <- F_INICIO %m-% months(12)
+
+# iv) Colores de OEFA
+OEFA.AZUL1<-c("#144AA7")
+OEFA.TURQUEZA<-c("#0BC7E0")
+OEFA.VERDE<-c("#8CCD3A")
+OEFA.JADE<-c("#44bfb5")
+OEFA.AZUL2<-c("#1d85bf")
+OEFA.GRIS<-c("#696A6A")
+OEFA.NARANJA<-c("#FFB500")
+
+# II. Descarga de datos ----
+# i) Descarga de base de datos
+tp1<-tempfile() # Creación de un archivo temporal
+download.file(FUENTE_AUTO_ODES, tp1, mode ="wb")
+
+# ii) Definición de diccionario de datos
+DIC <- read_xlsx(path = tp1, sheet = "DIC_VARIABLES")
+DIC_AUTO_ODES <- DIC[DIC$`RELEVANTE EN SCRIPT`=="SI", ] 
+DIC_AUTO_ODES <- DIC_AUTO_ODES[,c(2:3)]
+CABECERAS <- as.list(DIC_AUTO_ODES)
+
+# iii) Selección de información de acuerdo al diccionario
+AUTO_ODES <- as.data.frame(read_xlsx(tp1, sheet = "CONSOLIDADO-TOTAL"))
+AUTO_ODES <- subset(AUTO_ODES, select = CABECERAS$`CAMPO EN BD`)
+colnames(AUTO_ODES) <- CABECERAS$`CODIGO CAMPO`
+
+# III. Preparación de tablas ----
+# i) Variables de tiempo y tablas generales
+AUTO_ODES <- AUTO_ODES %>%
+  mutate(FECHA_FIN_SISEFA = as.Date(FECHA_FIN_SISEFA)) %>%
+  mutate(MES=factor(month(FECHA_FIN_SISEFA),
+         levels = c("1", "2", "3", "4", "5", "6", 
+                    "7", "8", "9", "10", "11", "12"),
+         labels = c("Enero", "Febrero","Marzo", "Abril", 
+                    "Mayo", "Junio", "Julio", "Agosto", 
+                    "Sept.", "Oct.", "Nov.", "Diciembre")))  %>%
+  mutate(PERIODO = year(FECHA_FIN_SISEFA),
+         T_OFICINA = case_when(ODE_CODIGO == "OE CHIMBOTE" |
+                                 ODE_CODIGO == "OE COTABAMBAS" |
+                                 ODE_CODIGO == "OE ESPINAR" |
+                                 ODE_CODIGO == "OE LA CONVENCIÓN" |
+                                 ODE_CODIGO == "OE PICHANAKI"
+                               ~ "Oficina de Enlace",
+                               TRUE ~ "Oficina Desconcentrada"))
+
+# Tabla de expedientes totales de la ODE últimos 12 meses
+T_EXP_ODES <- AUTO_ODES %>%
+  filter(FECHA_FIN_SISEFA >= F_INICIO_HIST) %>%
+  mutate(MES = month(FECHA_FIN_SISEFA),
+         PERIODO = year(FECHA_FIN_SISEFA)) %>%
+  group_by(ODE_CODIGO, PERIODO, MES) %>%
+  summarize(P_TOTAL = mean(P_TOTAL),
+            N = n())  %>%
+  ungroup()
+
+# Tabla de expedientes totales del mes
+T_EXP_MES <- AUTO_ODES %>%
+  filter(FECHA_FIN_SISEFA >= F_INICIO,
+         FECHA_FIN_SISEFA <= F_FIN)
+
+# ii) Figura 1: Histórico de Puntaje
+FIG_1_HIST <- T_EXP_ODES %>%
+  filter(ODE_CODIGO==ODE_ANALISIS)  %>% 
+  # Incluimos variable fecha para scale_x_date
+  mutate(FECHA = as.Date(paste0(PERIODO,"-",MES,"-01"),
+                         format='%Y-%m-%d'),
+         POND_S = N*P_TOTAL) %>%
+  filter(FECHA <= F_FIN,
+         FECHA >= F_INICIO_HIST)
+
+# iii) Promedio histórico ponderado
+# Promedio mensual
+T_EXP_PROM <- T_EXP_MES %>%
+  group_by(ODE_CODIGO) %>%
+  summarise(P_TOTAL=mean(P_TOTAL),
+            N_EXP = n())
+
+# Promedio ponderado histórico de la OD
+T_EXP_PON <- T_EXP_ODES %>%
+  mutate(TOT_PON = N * P_TOTAL) %>%
+  group_by(ODE_CODIGO) %>%
+  summarise(PP_ODE_H = sum(TOT_PON) / sum(N))
+
+# Puntaje de ODES para ranking
+P_EXP_ODES <- merge(T_EXP_PROM, T_EXP_PON)
+
+FIG_2_RANK <- P_EXP_ODES %>%
+  arrange(P_TOTAL, PP_ODE_H) %>%
+  # Orden en el gráfico
+  mutate(N = as.factor(row_number())) %>%
+  arrange(-P_TOTAL, -PP_ODE_H) %>%
+  # Puesto en el ranking
+  mutate(PUESTO = row_number(),
+         PP_MES = P_TOTAL*N_EXP)  
+
+PUESTO <- FIG_2_RANK$PUESTO[FIG_2_RANK$ODE_CODIGO == ODE_ANALISIS]
+
+# iii) Expedientes totales de la ODE en el mes
+T_ODE_MES <- filter(T_EXP_MES, ODE_CODIGO==ODE_ANALISIS)
+# Va al anexo
+
+# iv) Datos sobre la OD
+T_ODE_MES_R <- T_ODE_MES %>%
+  group_by(ODE_NOMBRE, ODE_CODIGO, T_OFICINA, PERIODO, MES) %>%
+  summarise(FORM_P_ETAPA_PREP = round(mean(FORM_P_ETAPA_PREP)), 
+            FORM_P_ETAPA_EJEC = round(mean(FORM_P_ETAPA_EJEC)),
+            FORM_P_ETAPA_RES = round(mean(FORM_P_ETAPA_RES)),
+            FONDO_P_ETAPA_PREP = round(mean(FONDO_P_ETAPA_PREP)),
+            FONDO_P_ETAPA_EJEC = round(mean(FONDO_P_ETAPA_EJEC)),
+            FONDO_P_ETAPA_RES = round(mean(FONDO_P_ETAPA_RES)),
+            P_TOTAL = round(mean(P_TOTAL)),
+            n = n())
+
+# iv) Tabla de expedientes para el anexo
+EXP_ANEXO <- T_EXP_MES %>%
+  filter(ODE_CODIGO==ODE_ANALISIS) %>%
+  select(EXP_SUP, P_TOTAL) %>%
+  mutate(EXPEDIENTE_SUPERVISION = EXP_SUP,
+         PUNTAJE = round(P_TOTAL)) %>%
+  select(EXPEDIENTE_SUPERVISION, PUNTAJE)
+
+```
+
+\definecolor{AZUL_OEFA}{rgb}{0.078,0.29,0.65}
+
+\vspace{3mm}
+\centerline{\textbf{REPORTE DE RESULTADOS DE AUTOEVALUACIÓN}}
+\centerline{\textbf{DE EXPEDIENTES DE SUPERVISIÓN A EFA}}
+\vspace{3mm}
+
+\begin{tabular}
+{| p{5cm} | p{10cm} |}
+\hline
+\cellcolor{AZUL_OEFA} & \\
+\cellcolor{AZUL_OEFA} \textcolor{white}{\textbf{`r T_ODE_MES_R$T_OFICINA[[1]]`}} & `r T_ODE_MES_R$ODE_NOMBRE[[1]]`\\
+\cellcolor{AZUL_OEFA} & \\
+\hline
+\cellcolor{AZUL_OEFA} & \\
+\cellcolor{AZUL_OEFA} \textcolor{white}{\textbf{Periodo evaluado}} & `r T_ODE_MES_R$MES[[1]]` de `r T_ODE_MES_R$PERIODO[[1]]` \\
+\cellcolor{AZUL_OEFA} & \\
+\hline
+\end{tabular}
+\vspace{1mm}
+\normalsize
+
+**Nota:**  El presente reporte se realiza teniendo en cuenta los datos obtenidos de la autoevaluación realizada por cada oficina desconcentrada, en el marco de lo establecido en la Resolución de Consejo Directivo Nº 018-2018-OEFA/CD.
+
+# RESULTADO GENERAL
+
+## Puntaje general
+\begin{tabular}
+{| p{3cm} | p{4cm} | p{3cm} | p{4cm} |}
+\hline
+\cellcolor{AZUL_OEFA} & & \cellcolor{AZUL_OEFA} & \\
+\cellcolor{AZUL_OEFA} \textcolor{white}{\textbf{Puntaje}} & `r T_ODE_MES_R$P_TOTAL[[1]]` de 100 & \cellcolor{AZUL_OEFA} \textcolor{white}{\textbf{Puesto}} & `r PUESTO[[1]]` de `r nrow(FIG_2_RANK)` \\
+\cellcolor{AZUL_OEFA} & & \cellcolor{AZUL_OEFA} & \\
+\hline
+\end{tabular}
+\vspace{1mm}
+\normalsize
+
+**Nota:** El puntaje por cada expediente evaluado se encuentra en el anexo adjunto.
+
+
+
+## Puntaje por aspectos evaluados
+\begin{tabular}
+{| p{7.45cm} | p{7.45cm} |}
+\hline
+\cellcolor{AZUL_OEFA} & \cellcolor{AZUL_OEFA} \\
+\cellcolor{AZUL_OEFA} \textcolor{white}{\centerline{\textbf{Aspectos formales}}} & \cellcolor{AZUL_OEFA} \textcolor{white}{\centerline{\textbf{Aspectos de fondo}}} \\
+\cellcolor{AZUL_OEFA} & \cellcolor{AZUL_OEFA} \\
+\hline
+\end{tabular}
+\vspace{1mm}
+\normalsize
+\begin{tabular}
+{| p{3cm} | p{4cm} | p{3cm} | p{4cm} |}
+\hline
+& & & \\
+\centerline{\textbf{Planificación}} & \centerline{`r T_ODE_MES_R$FORM_P_ETAPA_PREP[[1]]` de 30} & \centerline{\textbf{Planificación}} & \centerline{`r T_ODE_MES_R$FONDO_P_ETAPA_PREP[[1]]` de 10} \\
+\hline
+& & & \\
+\centerline{\textbf{Ejecución}} & \centerline{`r T_ODE_MES_R$FORM_P_ETAPA_EJEC[[1]]` de 10*} & \centerline{\textbf{Ejecución }} & \centerline{`r T_ODE_MES_R$FONDO_P_ETAPA_EJEC[[1]]` de 10} \\
+\hline
+& & & \\
+\centerline{\textbf{Resultados}} & \centerline{`r T_ODE_MES_R$FORM_P_ETAPA_RES[[1]]` de 60} & \centerline{\textbf{Resultados}} & \centerline{`r T_ODE_MES_R$FONDO_P_ETAPA_RES[[1]]` de 80} \\
+\hline
+\end{tabular}
+\vspace{1mm}
+\normalsize
+
+**Nota:** Los aspectos de forma y fondo representan cada uno el 50% del puntaje general.    
+
+\vspace{3mm}
+
+\footnotesize (*): Considerar que la etapa de ejecución corresponde únicamente a supervisiones in situ, por lo que al no tener este tipo de supervisiones obtendrá un puntaje de 0/10, que no será considerado para el cálculo de su puntaje final.
+
+\newpage
+
+# HISTÓRICO DEL PUNTAJE GENERAL DE LA `r T_ODE_MES_R$ODE_CODIGO[[1]]`
+
+En este apartado se muestra la evolución de los puntajes generales de la `r T_ODE_MES_R$ODE_NOMBRE[[1]]` con relación a los resultados obtenidos en los últimos doce meses.
+
+```{r out.width = "70%",fig.align='center',fig.cap="\\label{Graph_1}Histórico del puntaje general durante los últimos 12 meses"}
+
+# Gráfico 1: Puntaje histórico de la OD en los últimos 12 meses ----
+HIST_OD <- FIG_1_HIST %>%
+  ggplot(aes(x=FECHA, y=P_TOTAL, 
+             label=round(P_TOTAL))) +
+  geom_bar(stat="identity", 
+           fill=OEFA.AZUL1) +
+  geom_text(color="white",
+            vjust=1.25,
+            size=6.5,
+            fontface = "bold") +
+  geom_hline(yintercept=100,
+        linetype="dashed") +
+  labs(x="",
+       y="Promedio de puntaje mensual") +
+  theme_minimal() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  scale_y_continuous(limits=c(0,100), 
+                     breaks = seq(0, 100, by=25)) +
+  scale_x_date(date_labels = "%b",breaks = "1 month", expand = c(0.01,0))
+
+HIST_OD
+
+```
+
+# PUNTAJE DE LA `r T_ODE_MES_R$ODE_CODIGO[[1]]` EN RELACIÓN AL RESTO DE LAS ODES
+
+En este apartado se muestra el puntaje general de la `r T_ODE_MES_R$ODE_NOMBRE[[1]]` respecto del resto de puntajes obtenidos por las ODES.
+
+```{r out.width = "70%",fig.align='center',fig.cap="\\label{Graph_2}Puntaje de la OD respecto al resto de ODES"}
+
+# Gráfico 2: Puntaje de la OD respecto a las demás ----
+
+# Puesto inverso de la ODE para situarla en el eje X
+N_ODE <- as.character(nrow(FIG_2_RANK) - PUESTO + 1)
+# Promedio para graficarla
+P_ODE <- FIG_2_RANK$P_TOTAL[FIG_2_RANK$ODE_CODIGO==ODE_ANALISIS]
+# Promedio ponderado
+PROM_PON <- round(sum(FIG_2_RANK$PP_MES) / sum(FIG_2_RANK$N_EXP),1)
+N_PP <- nrow(FIG_2_RANK)
+
+G_COMP_ODE <- FIG_2_RANK %>%
+  ggplot(aes(x=N, 
+             y=P_TOTAL, 
+             label=round(P_TOTAL), 
+             fill=N)) +
+  geom_point(size=8, 
+             color="black") + 
+  geom_hline(yintercept = PROM_PON,
+             linetype = "dashed") +
+  geom_point(aes(x=N_ODE, y=P_ODE, color=N_ODE), 
+             color=OEFA.AZUL1, size = 8.5) +
+  geom_text(color="white",
+            fontface = "bold") + 
+  geom_text(x = N_PP, y = PROM_PON, 
+            hjust = 1, # Mientras incrementa el número, más a la izquierda
+            vjust = 1.5,
+            label = paste0("PP: ", PROM_PON)) +
+  labs(x="Posición respecto a las demás",
+       y="Puntaje promedio mensual de ODES",
+       caption="Nota: La línea horizontal representa el promedio ponderado (PP) de los puntajes obtenidos por las Oficinas \nDesconcentradas en el periodo de evaluación. En otras palabras, este promedio se ajusta en función a la \ncantidad de expedientes de supervisión del mes.") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_blank(),
+        plot.caption=element_text(hjust = 0)) +
+  scale_y_continuous(limits=c(0,110), 
+                     breaks = seq(0, 100, by=25))
+G_COMP_ODE
+
+```
+**Fecha de actualización del reporte:** `r format(now(), "%d/%m/%Y")`
+
+\newpage
+
+\centerline{\textbf{ANEXO}}
+
+\arrayrulecolor{black}
+```{r}
+# Tabla Anexos ----
+TAB_1 <- knitr::kable(EXP_ANEXO,
+                      caption = "Puntaje de los expedientes autoevaluados:",
+                      align= "cc", 
+                      format = "latex")
+TAB_1
+```
+**Nota:** Los puntajes han sido redondeados.
